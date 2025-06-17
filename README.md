@@ -141,7 +141,7 @@ following themes:
 The Java module system was introduced in Java 9 and provides a higher-level abstraction for grouping a set of Java
 packages and resources along with additional metadata. The metadata is used to identify what services the module
 offers, what dependencies the module requires, and provides a mechanism for explicitly defining which module classes are
-“visible” to Java classes that are external to the module.
+"visible" to Java classes that are external to the module.
 
 The module system provides strong encapsulation and the core Java libraries, starting with Java 9, have been designed
 to use the module specification. The rules of the module system, if strictly enforced, introduce breaking changes to
@@ -150,7 +150,7 @@ application to have a mix of module-compliant code along with code that is not a
 
 Even as Java has reached Java 15, there are a large number of applications and libraries that are not compliant with
 the rules defined by the Java module system. Rather than breaking those libraries, the Java runtime has been configured
-to allow mixed-use applications. If an application makes an illegal, reflective call to a module’s unpublished resource,
+to allow mixed-use applications. If an application makes an illegal, reflective call to a module's unpublished resource,
 a warning will be logged.
 
 The default behavior, starting with Java 11, is to log a warning the first time an illegal access call is made. All
@@ -199,3 +199,222 @@ We appreciate all types of contributions. See the [contributing guide](https://g
 ### Licensing
 
 For more information about licensing, please visit our [licensing page](https://docs.openrewrite.org/licensing/openrewrite-licensing).
+
+# Java Migration Tool - Go Implementation
+
+A Go-based tool for migrating Java applications between versions, inspired by OpenRewrite's rewrite-migrate-java.
+
+## Overview
+
+This tool provides automated migration capabilities for Java applications, helping developers upgrade from older Java versions to newer ones (Java 8 → 11, 11 → 17, 17 → 21). It handles common migration tasks including:
+
+- **Build Configuration Updates**: Updates Maven and Gradle build files with new Java versions
+- **Dependency Migration**: Migrates Java EE dependencies to Jakarta EE
+- **API Replacements**: Replaces deprecated APIs with modern equivalents
+- **Code Transformations**: Handles package namespace changes and method signature updates
+
+## Features
+
+### Supported Migration Paths
+- **Java 8 to 11**: Complete migration including Java EE to Jakarta EE transition
+- **Java 11 to 17**: Handles deprecated APIs and reflective access issues
+- **Java 17 to 21**: Includes sequenced collections and latest features
+- **Custom Versions**: Support for any target Java version
+
+### Key Transformations
+- Replace `sun.misc.BASE64Encoder/Decoder` with `java.util.Base64`
+- Migrate Java EE packages to Jakarta EE equivalents
+- Update Maven compiler plugin configurations
+- Update Gradle Java compatibility settings
+- Handle illegal reflective access warnings
+
+## Installation
+
+### Prerequisites
+- Go 1.21 or later
+- Java project with Maven or Gradle build system
+
+### Build from Source
+```bash
+git clone <repository>
+cd rewrite-migrate-java
+go build -o java-migrate cmd/migrate/main.go
+```
+
+## Usage
+
+### Basic Usage
+```bash
+# Migrate to Java 17
+./java-migrate /path/to/java/project
+
+# Migrate to specific version
+./java-migrate -version=11 /path/to/java/project
+
+# Dry run (show changes without applying)
+./java-migrate -dry-run /path/to/java/project
+
+# Custom source directory
+./java-migrate -src=src/main/java /path/to/java/project
+```
+
+### Command Line Options
+- `-version`: Target Java version (default: 17)
+- `-src`: Source directory to scan (default: "src/main/java")
+- `-dry-run`: Show what would be changed without applying changes
+
+### Examples
+
+#### Migrate Java 8 project to Java 11
+```bash
+./java-migrate -version=11 ./my-java8-project
+```
+
+#### Preview changes for Java 17 migration
+```bash
+./java-migrate -version=17 -dry-run ./my-java-project
+```
+
+## Architecture
+
+The tool follows the recipe pattern used by OpenRewrite, with Go-specific adaptations:
+
+```
+pkg/
+├── recipe/          # Core recipe interfaces and base types
+├── java/            # Java source file parsing and representation
+├── migrate/         # Migration recipe implementations
+└── cmd/migrate/     # CLI application
+```
+
+### Key Components
+
+1. **Recipe Interface**: Defines migration operations
+2. **TreeVisitor**: Traverses and modifies source files
+3. **SourceFile**: Represents Java source files and build files
+4. **Migration Recipes**: Specific transformations (e.g., Java version upgrade, API replacement)
+
+## Supported Transformations
+
+### Build File Updates
+- **Maven**: Updates `maven.compiler.source`, `maven.compiler.target`, and plugin configurations
+- **Gradle**: Updates `sourceCompatibility`, `targetCompatibility`, and toolchain settings
+
+### Code Transformations
+
+#### Base64 Migration
+```java
+// Before (Java 8)
+import sun.misc.BASE64Encoder;
+BASE64Encoder encoder = new BASE64Encoder();
+String encoded = encoder.encode(data);
+
+// After (Java 8+)
+import java.util.Base64;
+String encoded = Base64.getEncoder().encodeToString(data);
+```
+
+#### Java EE to Jakarta EE
+```java
+// Before
+import javax.persistence.Entity;
+import javax.servlet.http.HttpServlet;
+
+// After
+import jakarta.persistence.Entity;
+import jakarta.servlet.http.HttpServlet;
+```
+
+## Recipe System
+
+### Built-in Recipes
+
+#### Version Upgrade Recipes
+- `UpgradeJavaVersion`: Updates build files to target specific Java version
+- `Java8ToJava11`: Comprehensive Java 8 to 11 migration
+- `UpgradeToJava17`: Migration to Java 17 with LTS features
+- `UpgradeToJava21`: Latest Java 21 migration
+
+#### API Migration Recipes
+- `UseJavaUtilBase64`: Replaces sun.misc Base64 with java.util.Base64
+- `JavaEEToJakartaEE`: Migrates Java EE to Jakarta EE packages
+- `RemoveDeprecatedAPIs`: Removes usage of deprecated APIs
+
+### Creating Custom Recipes
+
+```go
+type MyCustomRecipe struct {
+    *recipe.BaseRecipe
+}
+
+func (r *MyCustomRecipe) GetVisitor() recipe.TreeVisitor {
+    return &MyCustomVisitor{}
+}
+
+type MyCustomVisitor struct{}
+
+func (v *MyCustomVisitor) Visit(node recipe.SourceFile, ctx *recipe.ExecutionContext) (recipe.SourceFile, error) {
+    // Implement custom transformation logic
+    content := node.GetContent()
+    
+    // Modify content as needed
+    modifiedContent := transformContent(content)
+    
+    if modifiedContent != content {
+        return node.WithContent(modifiedContent), nil
+    }
+    
+    return node, nil
+}
+```
+
+## Comparison with Original Java Implementation
+
+| Feature | Java (OpenRewrite) | Go Implementation |
+|---------|-------------------|-------------------|
+| AST Parsing | Full Java AST | Regex-based parsing |
+| Template System | JavaTemplate | String replacements |
+| Type Safety | Full type checking | Pattern matching |
+| Performance | JVM overhead | Native binary |
+| Extensibility | Rich plugin system | Go interfaces |
+| Complexity | High | Simplified |
+
+## Limitations
+
+- **Parsing**: Uses regex-based parsing instead of full AST
+- **Type Checking**: Limited type safety compared to OpenRewrite
+- **Template System**: Simple string replacements vs. sophisticated templates
+- **Coverage**: Subset of OpenRewrite's transformation capabilities
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Implement your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+### Adding New Recipes
+
+1. Create recipe struct implementing `recipe.Recipe`
+2. Implement `TreeVisitor` for transformations
+3. Add to appropriate migration composite recipe
+4. Add tests and documentation
+
+## Testing
+
+```bash
+# Run tests
+go test ./...
+
+# Test with a sample project
+go run cmd/migrate/main.go -dry-run ./testdata/sample-project
+```
+
+## License
+
+Licensed under the Moderne Source Available License (same as original).
+
+## Acknowledgments
+
+This Go implementation is inspired by and based on the [OpenRewrite](https://github.com/openrewrite/rewrite) project and specifically [rewrite-migrate-java](https://github.com/openrewrite/rewrite-migrate-java). The original Java implementation provides the conceptual foundation and migration patterns implemented here in Go.
